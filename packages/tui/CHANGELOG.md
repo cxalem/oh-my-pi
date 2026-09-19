@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed the status-line context gauge's unused track vanishing in themes whose `border` color nearly matches the status-line background (about a third of the bundled themes, e.g. `titanium`); the track now falls back to `dim` or `muted` when `border` has under 1.5:1 contrast.
+
 ## [18.2.5] - 2026-09-17
 
 ### Added

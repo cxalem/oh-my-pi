@@ -18,7 +18,7 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "../index";
-import { adjustHsv, formatNumber, getProjectDir, hexToRgb, rgbToHex } from "@oh-my-pi/pi-utils";
+import { adjustHsv, formatNumber, getProjectDir, hexToRgb, relativeLuminance, rgbToHex } from "@oh-my-pi/pi-utils";
 import type {
 	ActiveRepoContext,
 	StatusAccountIdentity as OAuthAccountIdentity,
@@ -404,6 +404,28 @@ function removeContextSegments(parts: string[], segments: StatusLineSegmentId[])
 
 function formatEmbeddedContextPercent(percent: number): string {
 	return `${percent > 0 && percent < 1 ? percent.toFixed(1) : Math.round(percent)}%`;
+}
+
+/**
+ * Minimum WCAG contrast the gauge's unused track keeps against the status-line
+ * surface. Many themes set `border` within a few percent of the background, which
+ * is fine for box chrome but erases the track, leaving the used span, the
+ * compaction markers, and the window label floating with nothing between them.
+ */
+const GAUGE_TRACK_MIN_CONTRAST = 1.5;
+const GAUGE_TRACK_COLORS = ["border", "dim", "muted"] as const;
+
+/** The first of border/dim/muted that stays visible on the status-line surface. */
+function gaugeTrackColor(): (typeof GAUGE_TRACK_COLORS)[number] {
+	const surface = relativeLuminance(theme.getBgHex("statusLineBg"));
+	if (surface === undefined) return "border";
+	for (const color of GAUGE_TRACK_COLORS) {
+		const luminance = relativeLuminance(theme.getColorHex(color));
+		if (luminance === undefined) continue;
+		const ratio = (Math.max(luminance, surface) + 0.05) / (Math.min(luminance, surface) + 0.05);
+		if (ratio >= GAUGE_TRACK_MIN_CONTRAST) return color;
+	}
+	return "border";
 }
 
 function embeddedContextGaugeMinWidth(percent: number, contextWindow: number): number {
@@ -2791,7 +2813,7 @@ export class StatusLineComponent<TSession extends StatusLineSession = StatusLine
 		// At least one accent cell: a fresh session still shows the session-accent
 		// line starting at the left instead of a fully dim bar.
 		const usedCount = Math.min(scaleWidth, Math.max(1, Math.round((clampedPct / 100) * scaleWidth)));
-		const unusedColor = theme.getFgAnsi("border");
+		const unusedColor = theme.getFgAnsi(gaugeTrackColor());
 
 		// Boundary markers are only meaningful when auto-compaction can fire and
 		// the line is long enough for the markers to read as positions.

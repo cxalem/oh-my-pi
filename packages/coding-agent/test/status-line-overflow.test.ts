@@ -8,7 +8,7 @@ import { StatusLineComponent } from "@oh-my-pi/pi-tui/status-line";
 import { statusLineHost } from "@oh-my-pi/pi-coding-agent/modes/status-line-host";
 import type { SegmentContext } from "@oh-my-pi/pi-tui/status-line/segments";
 import { renderSegment } from "@oh-my-pi/pi-tui/status-line/segments";
-import { initTheme, theme } from "@oh-my-pi/pi-tui/theme";
+import { getCurrentThemeName, initTheme, setTheme, theme } from "@oh-my-pi/pi-tui/theme";
 import { getSessionAccentAnsi, getSessionAccentHex } from "@oh-my-pi/pi-tui/theme/session-color";
 import { visibleWidth } from "@oh-my-pi/pi-tui";
 import { getProjectDir, setProjectDir } from "@oh-my-pi/pi-utils";
@@ -517,5 +517,40 @@ describe("overflow: path survives before model", () => {
 		const rendered = stripAnsi(component.getTopBorder(width).content);
 		expect(rendered).toContain("xyz");
 		expect(rendered).not.toContain("MODEL_SHOULD_DROP");
+	});
+});
+
+describe("status line context gauge track", () => {
+	function gauge(): string {
+		const component = statusLines.track(
+			new StatusLineComponent(createStatusLineSession("Named session"), statusLineHost),
+		);
+		component.updateSettings({
+			preset: "custom",
+			leftSegments: ["pi"],
+			rightSegments: [],
+			separator: "powerline-thin",
+			sessionAccent: false,
+		});
+		return component.getBandTopBorder(80).content;
+	}
+
+	it("falls back to a visible color when the theme border blends into the status-line surface", async () => {
+		const original = getCurrentThemeName();
+		try {
+			// titanium: border #2a3038 on statusLineBg #0f1216 is ~1.4:1 — the unused
+			// track used to vanish, stranding the markers and window label.
+			expect((await setTheme("titanium")).success).toBe(true);
+			const horizontal = theme.boxRound.horizontal;
+			const low = gauge();
+			expect(low).toContain(`${theme.getFgAnsi("dim")}${horizontal}`);
+			expect(low).not.toContain(`${theme.getFgAnsi("border")}${horizontal}`);
+
+			// dark: border already clears the floor, so the track keeps the border color.
+			expect((await setTheme("dark")).success).toBe(true);
+			expect(gauge()).toContain(`${theme.getFgAnsi("border")}${theme.boxRound.horizontal}`);
+		} finally {
+			if (original) await setTheme(original);
+		}
 	});
 });
